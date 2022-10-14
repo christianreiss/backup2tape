@@ -166,35 +166,35 @@ fi
 
 # Get current tape position.
 TAPE_POS=$(mt -f ${TAPE_DEVICE} status | grep 'File number=' | awk -F'File number=' ' { print $2 } ' | awk -F',' ' { print $1 } ')
-printLine "Tape is at position ${TAPE_POS}."
 
 # Check if the tape is known to us.
 if [ ! -e "${BASE}/${TAPE}.track" ] ; then
   # Fresh tape.
   printLine "New tape, starting from BOT."
-  TRACK='1'
+  TRACK='0'
 else
   # Known track.
   CUR_POS=$(cat ${BASE}/${TAPE}.track)
   # let CUR_POS=CUR_POS+1
   let fsf_count=CUR_POS-TAPE_POS
-  printLine "Known tape, continuing at ${CUR_POS}, currently at ${TAPE_POS}, need to forward ${fsf_count} marks!"
+  #printLine "Known tape, continuing at ${CUR_POS}, currently at ${TAPE_POS}, need to forward ${fsf_count} marks!"
 
   # Check if we need to move the tape.
   if [ "${TAPE_POS}" != "${CUR_POS}" ] ;then
-    printLine "Need to adjust the tape!"
+    printLine "Known tape, continuing at ${CUR_POS}, currently at ${TAPE_POS}, need to forward ${fsf_count} marks!"
     # mt -f ${TAPE_DEVICE} rewind
+    #exit 0
     mt -f ${TAPE_DEVICE} fsf ${fsf_count}
 
     TAPE_POS=$(mt -f ${TAPE_DEVICE} status | grep 'File number=' | awk -F'File number=' ' { print $2 } ' | awk -F',' ' { print $1 } ')
     printLine "Tape is now at position ${TAPE_POS}."
   else
-    printLine "Tape already at correct position."
+    printLine "Known tape, continuing at ${CUR_POS}, currently at ${TAPE_POS}, no spooling required."
   fi
   TRACK="${CUR_POS}"
 fi
 
-# exit 0
+#exit 0
 
 OPTIONS="--listed-incremental=${BASE}/${MODULE}.diff -M --index-file=${BASE}/${MODULE}-${TAPE}-${TRACK}.idx -cvf ${TAPE_DEVICE}"
 
@@ -207,5 +207,8 @@ tar ${OPTIONS} ${MODULE} || exit 2
 # mt -f ${TAPE_DEVICE} weof
 # mt -f ${TAPE_DEVICE} status
 
-CUR_POS=$(mt -f ${TAPE_DEVICE} status | grep 'File number=' | awk -F'File number=' ' { print $2 } ' | awk -F',' ' { print $1 } ')
+CUR_POS=$(mt -f ${TAPE_DEVICE} status | grep 'File number=' | awk -F'File number=' ' { print $2 } ' | awk -F',' ' { print $1 } ') || exit 2
+printLine "Dump OK."
+
 echo ${CUR_POS} > ${BASE}/${TAPE}.track
+printEnd
