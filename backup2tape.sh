@@ -194,18 +194,18 @@ else
   TRACK="${CUR_POS}"
 fi
 
-exit 0
+# exit 0
 
 OPTIONS="--listed-incremental=${BASE}/${MODULE}.diff -M --index-file=${BASE}/${MODULE}-${TAPE}-${TRACK}.idx -cvf ${TAPE_DEVICE}"
 
 # Free space on tape.
 # sudo sg_read_attr /dev/nst0 |  grep 'Remaining capacity in partition' | awk ' { print $6 } '
 
-cd "$[MODULE_BASE]" || exit 2
-mt -f ${TAPE_DEVICE} status
+cd "${MODULE_BASE}" || exit 2
+# mt -f ${TAPE_DEVICE} status
 tar ${OPTIONS} ${MODULE} || exit 2
 # mt -f ${TAPE_DEVICE} weof
-mt -f ${TAPE_DEVICE} status
+# mt -f ${TAPE_DEVICE} status
 
 CUR_POS=$(mt -f ${TAPE_DEVICE} status | grep 'File number=' | awk -F'File number=' ' { print $2 } ' | awk -F',' ' { print $1 } ')
 echo ${CUR_POS} > ${BASE}/${TAPE}.track
