@@ -66,9 +66,8 @@ _arg_device="${TAPE_DEVICE}"
 
 print_help()
 {
-  printf 'Usage: %s [-d|--device <arg>] <module> <tape>\n' "$0"
+  printf 'Usage: %s [-d|--device <arg>] <module> \n' "$0"
   printf '\t%s\n' "<module>: what module to back up"
-  printf '\t%s\n' "<tape>: what tape to use"
   printf '\t%s\n' "-d, --device: specify a tape device (default: '${TAPE_DEVICE}')"
 }
 
@@ -104,16 +103,16 @@ parse_commandline()
 
 handle_passed_args_count()
 {
-  local _required_args_string="'module' and 'tape'"
-  test "${_positionals_count}" -ge 2 || _PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require exactly 2 (namely: $_required_args_string), but got only ${_positionals_count}." 1
-  test "${_positionals_count}" -le 2 || _PRINT_HELP=yes die "FATAL ERROR: There were spurious positional arguments --- we expect exactly 2 (namely: $_required_args_string), but got ${_positionals_count} (the last one was: '${_last_positional}')." 1
+  local _required_args_string="'module'"
+  test "${_positionals_count}" -ge 1 || _PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require exactly 1 (namely: $_required_args_string), but got only ${_positionals_count}." 1
+  test "${_positionals_count}" -le 1 || _PRINT_HELP=yes die "FATAL ERROR: There were spurious positional arguments --- we expect exactly 1 (namely: $_required_args_string), but got ${_positionals_count} (the last one was: '${_last_positional}')." 1
 }
 
 
 assign_positional_args()
 {
   local _positional_name _shift_for=$1
-  _positional_names="_arg_module _arg_tape "
+  _positional_names="_arg_module"
 
   shift "$_shift_for"
   for _positional_name in ${_positional_names}
@@ -144,10 +143,11 @@ assign_positional_args 1 "${_positionals[@]}"
 
 
 MODULE=${_arg_module}
-TAPE=${_arg_tape}
-printLine "Device: ${TAPE_DEVICE}"
-printLine "Tape  : ${TAPE}"
-printLine "Module: ${MODULE}"
+# TAPE=${_arg_tape}
+TAPE=$(sudo sg_read_attr -q -f 0x0401 /dev/nst0 | awk -F 'Medium serial number: ' ' { print $2 } ' | awk ' { print $1 }')
+printLine "Device : ${TAPE_DEVICE}"
+printLine "Tape   : ${TAPE}"
+printLine "Module : ${MODULE}"
 
 if [ "$(mt -f /dev/nst0 status | grep 'DR_OPEN IM_REP_EN' | wc -l)" == '1' ] ; then
   printLine "No tape is inserted, aborting."
@@ -162,7 +162,6 @@ else
   printEnd
   exit 2
 fi
-
 
 # Get current tape position.
 TAPE_POS=$(mt -f ${TAPE_DEVICE} status | grep 'File number=' | awk -F'File number=' ' { print $2 } ' | awk -F',' ' { print $1 } ')
@@ -200,6 +199,10 @@ OPTIONS="--listed-incremental=${BASE}/${MODULE}.diff -M --index-file=${BASE}/${M
 
 # Free space on tape.
 # sudo sg_read_attr /dev/nst0 |  grep 'Remaining capacity in partition' | awk ' { print $6 } '
+
+if [ "${MODULE}" == "rsnapshot" ] ; then
+	MODULE="${MODULE}/daily.0"
+fi
 
 cd "${MODULE_BASE}" || exit 2
 # mt -f ${TAPE_DEVICE} status
