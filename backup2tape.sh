@@ -178,14 +178,14 @@ else
 fi
 
 # Check if there is a tape inserted at all. If not, die.
-if [ "$(mt -f /dev/nst0 status | grep 'DR_OPEN IM_REP_EN' | wc -l)" == '1' ] ; then
+if [ "$(mt -f /dev/nst0 status | grep -c 'DR_OPEN IM_REP_EN')" == '1' ] ; then
   printLine "No tape is inserted, aborting."
   printEnd
   exit 0
 fi
 
 # Check if the inserted tape is marked as read-only in our DB.
-if [ "$(grep \"${TAPE}\" \"${BASE}/read-only.tapes\" | wc -l)" != '0' ] ; then
+if [ "$(grep -c \""${TAPE}"\" \"${BASE}/read-only.tapes\")" != '0' ] ; then
   printLine "Tape ${TAPE} is marked as full, can\'t use!"
   printEnd
   exit 1
@@ -201,15 +201,16 @@ if [ ! -e "${BASE}/${TAPE}.track" ] ; then
   TRACK='0'
 else
   # Known track.
-  CUR_POS=$(cat ${BASE}/${TAPE}.track)
+  CUR_POS=$(cat "${BASE}/${TAPE}.track")
   # let CUR_POS=CUR_POS+1
-  let fsf_count=CUR_POS-TAPE_POS
+  #let fsf_count=CUR_POS-TAPE_POS
+  (( fsf_count=CUR_POS-TAPE_POS )) || true
   #printLine "Known tape, continuing at ${CUR_POS}, currently at ${TAPE_POS}, need to forward ${fsf_count} marks!"
 
   # Check if we need to move the tape.
   if [ "${TAPE_POS}" != "${CUR_POS}" ] ;then
     printLine "Known tape, continuing at ${CUR_POS}, currently at ${TAPE_POS}, need to forward ${fsf_count} marks!"
-    mt -f ${TAPE_DEVICE} fsf ${fsf_count}
+    mt -f "${TAPE_DEVICE}" fsf "${fsf_count}"
 
     TAPE_POS=$(mt -f ${TAPE_DEVICE} status | grep 'File number=' | awk -F'File number=' ' { print $2 } ' | awk -F',' ' { print $1 } ')
     printLine "Tape is now at position ${TAPE_POS}."
@@ -242,8 +243,8 @@ fi
 # Assemble Includes, if any
 if [ -e "${BASE}/includes/${MODULE}" ] ; then
   printLine "Include directive for ${MODULE} found."
-  for i in $(cat "${BASE}/includes/${MODULE}") ; do
-    includes=$includes "${MODULE_BASE}/${MODULE}/$i"
+  grep -v '^ *#' < "${BASE}/includes/${MODULE}" | while IFS= read -r line ; do
+    includes=$includes "${MODULE_BASE}/${MODULE}/${line}"
   done
 fi
 
@@ -265,7 +266,7 @@ fi
 
 # Do the actual backup.
 cd "${MODULE_BASE}" || exit 2
-tar ${OPTIONS} ${excludes} ${includes} 1>/dev/null
+tar "${OPTIONS}" "${excludes}" "${includes}" 1>/dev/null
 printLine "Dump OK."
 
 # Backup done! Wohoo!
@@ -276,7 +277,7 @@ CURRENT_TAPE=$(sudo sg_read_attr -q -f 0x0401 /dev/nst0 | awk -F 'Medium serial 
 
 if [ "${CURRENT_TAPE}" == "${TAPE}" ]; then
   # Same Tape.
-  echo ${CUR_POS} > ${BASE}/${TAPE}.track
+  echo "${CUR_POS}" > ${BASE}/"${TAPE}".track
 else
   # New Tape.
   printLine "Marking Tape ID ${TAPE} as read-only."
@@ -284,12 +285,10 @@ else
   rm -f "${BASE}/${TAPE}.track"
 
   printLine "Setting Track ID to ${CUR_POS} for ID ${CURRENT_TAPE}."
-  echo ${CUR_POS} > ${BASE}/${CURRENT_TAPE}.track
+  echo "${CUR_POS}" > ${BASE}/"${CURRENT_TAPE}".track
   if [ ! -e "${BASE}/${MODULE}-${CURRENT_TAPE}-${TRACK}.idx" ] ; then
     ln -s "${BASE}/${MODULE}-${TAPE}-${TRACK}.idx" "${BASE}/${MODULE}-${CURRENT_TAPE}-${TRACK}.idx"
   fi
 fi
-
-
 
 printEnd
