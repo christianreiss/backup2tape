@@ -5,7 +5,7 @@
 # (test) Include per Module
 # (test) Read Only Tapes system
 # (test) Check for started tape id and last tape id
-# Change data to current dir (git)
+# (test) Change data to current dir (git)
 # (test) Check for root id
 # (test) Test Module exists
 
