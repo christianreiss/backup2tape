@@ -1,12 +1,12 @@
 #! /bin/bash
 
 # TODO
+# Locking
+# Autochanger support
 # (test) Exclude per Module
 # (test) Include per Module
 # (test) Read Only Tapes system
 # (test) Check for started tape id and last tape id
-# (test) Change data to current dir (git)
-# (test) Check for root id
 # (test) Test Module exists
 
 # Lazy Colors
@@ -36,7 +36,9 @@ printHeader "backup2tape"
 
 #  Config. Dont touch these, override with config file
 MODULE_BASE="/media"
-BASE="./data"
+SCRIPT=$(readlink -f $0)
+SCRIPTPATH=`dirname $SCRIPT`
+BASE="${SCRIPTPATH}/data"
 TAPE_DEVICE="/dev/nst0"
 
 # Handle overrides, if present.
@@ -149,7 +151,7 @@ assign_positional_args 1 "${_positionals[@]}"
 ##
 
 # Check for root rights
-if [ "$(whoani)" != 'root' ] ; then
+if [ "$(whoami)" != 'root' ] ; then
   printLine "Need superuser rights."
   printEnd
   exit 1
@@ -185,10 +187,14 @@ if [ "$(mt -f /dev/nst0 status | grep -c 'DR_OPEN IM_REP_EN')" == '1' ] ; then
 fi
 
 # Check if the inserted tape is marked as read-only in our DB.
-if [ "$(grep -c \""${TAPE}"\" \"${BASE}/read-only.tapes\")" != '0' ] ; then
-  printLine "Tape ${TAPE} is marked as full, can\'t use!"
-  printEnd
-  exit 1
+if [ -e "${BASE}/read-only.tapes" ] ; then
+  if [ "$(grep -c ${TAPE} ${BASE}/read-only.tapes)" != '0' ] ; then
+    printLine "Tape ${TAPE} is marked as full, can't use!"
+    printEnd
+    exit 1
+  fi
+else
+  printLine "I have no database of filled tapes."
 fi
 
 # Get current tape position.
@@ -221,7 +227,8 @@ else
 fi
 
 # Accemble the options for tar
-OPTIONS="--exclude-backups --listed-incremental=${BASE}/${MODULE}.diff -M --index-file=${BASE}/${MODULE}-${TAPE}-${TRACK}.idx -cvf ${TAPE_DEVICE}"
+#OPTIONS="--exclude-backups --listed-incremental=${BASE}/${MODULE}.diff -M --index-file=${BASE}/${MODULE}-${TAPE}-${TRACK}.idx -cvf ${TAPE_DEVICE}"
+OPTIONS="-cvf ${TAPE_DEVICE} --listed-incremental=${BASE}/${MODULE}.diff -M --index-file=${BASE}/${MODULE}-${TAPE}-${TRACK}.idx"
 
 # Free space on tape.
 # sudo sg_read_attr /dev/nst0 |  grep 'Remaining capacity in partition' | awk ' { print $6 } '
@@ -233,19 +240,14 @@ if [ ! -d "${MODULE_BASE}/${MODULE}" ] ; then
   exit 1
 fi
 
-#if [ "${MODULE}" == "rsnapshot" ] ; then
-#  for p in 'nextcloud/var/lib/nextcloud/christian/files' 'nextcloud/var/lib/nextcloud/miriam/files' ; do
-#    MODULES="${MODULES} ${MODULE}/daily.0/$p"
-#  #done
-#  MODULE=${MODULES}
-#fi
-
 # Assemble Includes, if any
 if [ -e "${BASE}/includes/${MODULE}" ] ; then
   printLine "Include directive for ${MODULE} found."
   grep -v '^ *#' < "${BASE}/includes/${MODULE}" | while IFS= read -r line ; do
     includes=$includes "${MODULE_BASE}/${MODULE}/${line}"
   done
+else
+  includes="${MODULE}"
 fi
 
 # Assemble Excludes, if any
@@ -266,10 +268,10 @@ fi
 
 # Do the actual backup.
 cd "${MODULE_BASE}" || exit 2
-tar "${OPTIONS}" "${excludes}" "${includes}" 1>/dev/null
+printLine "Tar options: "${OPTIONS}" "${excludes}" "${includes}""
+tar ${OPTIONS} ${excludes} ${includes} 1>/dev/null
 printLine "Dump OK."
 
-# Backup done! Wohoo!
 CUR_POS=$(mt -f ${TAPE_DEVICE} status | grep 'File number=' | awk -F'File number=' ' { print $2 } ' | awk -F',' ' { print $1 } ') || exit 2
 
 # Check if we are on the same tape we started, or not.
@@ -277,7 +279,7 @@ CURRENT_TAPE=$(sudo sg_read_attr -q -f 0x0401 /dev/nst0 | awk -F 'Medium serial 
 
 if [ "${CURRENT_TAPE}" == "${TAPE}" ]; then
   # Same Tape.
-  echo "${CUR_POS}" > ${BASE}/"${TAPE}".track
+  echo "${CUR_POS}" > "${BASE}/${TAPE}.track"
 else
   # New Tape.
   printLine "Marking Tape ID ${TAPE} as read-only."
