@@ -3,24 +3,41 @@
 # TODO
 # Locking
 # Autochanger support
+# Actuall use of colors.
 # (test) Exclude per Module
 # (test) Include per Module
 # (test) Read Only Tapes system
 # (test) Check for started tape id and last tape id
 # (test) Test Module exists
+# Store last-dump-dates
+# Enable Tape Compression by default using mt
 
 # Lazy Colors
 C_NONE="\033[0m"
 C_RED="\033[0;31m"
-C_BLUE="\033[0;34m"
+#C_BLUE="\033[0;34m"
 C_GREEN="\033[0;32m"
-C_YELLOW="\033[1;33m"
-C_CYAN="\033[0;36m"
-C_ORANGE="\033[0;33m"
+#C_YELLOW="\033[1;33m"
+#C_CYAN="\033[0;36m"
+#C_ORANGE="\033[0;33m"
 
 # Fancy Line printing.
 function printLine {
   echo -e "  ├ $*"
+}
+
+function printOK {
+  echo -e "  ├ [${C_GREEN}OK${C_NONE}] $*"
+}
+
+function printInfo {
+  echo -e "  ├ [${C_CYAN}INFO${C_NONE}] $*"
+}
+
+function printFail {
+  echo -e "  ├ [${C_RED}FAIL${C_NONE}] $*"
+  printEnd
+  exit 2
 }
 
 function printHeader {
@@ -36,14 +53,14 @@ printHeader "backup2tape"
 
 #  Config. Dont touch these, override with config file
 MODULE_BASE="/media"
-SCRIPT=$(readlink -f $0)
-SCRIPTPATH=`dirname $SCRIPT`
+SCRIPT=$(readlink -f "$0")
+SCRIPTPATH=$(dirname "${SCRIPT}")
 BASE="${SCRIPTPATH}/data"
 TAPE_DEVICE="/dev/nst0"
 
 # Handle overrides, if present.
 if [ -e "config" ] ; then
-  printLine "Local config round, loading."
+  printInfo "Local config round, loading."
   . config
 fi
 
@@ -71,9 +88,6 @@ begins_with_short_option()
 
 # THE DEFAULTS INITIALIZATION - POSITIONALS
 _positionals=()
-# THE DEFAULTS INITIALIZATION - OPTIONALS
-_arg_device="${TAPE_DEVICE}"
-
 
 print_help()
 {
@@ -90,17 +104,6 @@ parse_commandline()
   do
     _key="$1"
     case "$_key" in
-      -d|--device)
-        test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
-        _arg_device="$2"
-        shift
-        ;;
-      --device=*)
-        _arg_device="${_key##--device=}"
-        ;;
-      -d*)
-        _arg_device="${_key##-d}"
-        ;;
       *)
         _last_positional="$1"
         _positionals+=("$_last_positional")
@@ -150,51 +153,63 @@ assign_positional_args 1 "${_positionals[@]}"
 #
 ##
 
+
+#
+# Pre-Flight Checks
+#
+
 # Check for root rights
 if [ "$(whoami)" != 'root' ] ; then
-  printLine "Need superuser rights."
-  printEnd
-  exit 1
+  printFail "Need superuser rights."
 fi
+
+# Check if drive is busy.
+if ! mt -f ${TAPE_DEVICE} status >/dev/null 2>/dev/null ; then
+  printFail "Tape drive ${TAPE_DEVICE} is busy."
+else
+  printOK "Tape drive ${TAPE_DEVICE} is idle."
+fi
+
+#
+# End pre-flight checks
+#
+
 
 #
 # Set some variables
 #
 # The module (directory) to back up.
-MODULE=${_arg_module}
 # Load the serial number from the currently loaded tape.
-TAPE=$(sudo sg_read_attr -q -f 0x0401 /dev/nst0 | awk -F 'Medium serial number: ' ' { print $2 } ' | awk ' { print $1 }')
+TAPE=$(sg_read_attr -q -f 0x0401 /dev/nst0 | awk -F 'Medium serial number: ' ' { print $2 } ' | awk ' { print $1 }')
 
 # Show a summary of things found.
-printLine "Device : ${TAPE_DEVICE}"
-printLine "Tape   : ${TAPE}"
-printLine "Module : ${MODULE}"
+printInfo "Device : ${TAPE_DEVICE}"
+printInfo "Tape   : ${TAPE}"
+printInfo "Module : ${MODULE}"
 
 # Check if we have a tape inserted.
 if [ -c "${TAPE_DEVICE}" ] ; then
-  printLine "Tape Device ${TAPE_DEVICE} found."
+  # Tape device found
+  printOK "Tape Device ${TAPE_DEVICE} found."
 else
-  printLine "Tape Device ${TAPE_DEVICE} not found!"
-  printEnd
-  exit 2
+  # No Tape device found
+  printFail "Tape Device ${TAPE_DEVICE} not found!"
 fi
 
 # Check if there is a tape inserted at all. If not, die.
-if [ "$(mt -f /dev/nst0 status | grep -c 'DR_OPEN IM_REP_EN')" == '1' ] ; then
-  printLine "No tape is inserted, aborting."
-  printEnd
-  exit 0
+if [ "$(mt -f ${TAPE_DEVICE} | grep -c 'DR_OPEN IM_REP_EN')" == '1' ] ; then
+  prinfFail "No tape is inserted, aborting."
 fi
 
 # Check if the inserted tape is marked as read-only in our DB.
 if [ -e "${BASE}/read-only.tapes" ] ; then
-  if [ "$(grep -c ${TAPE} ${BASE}/read-only.tapes)" != '0' ] ; then
-    printLine "Tape ${TAPE} is marked as full, can't use!"
-    printEnd
-    exit 1
+  if [ "$(grep -c "${TAPE}" "${BASE}/read-only.tapes")" != '0' ] ; then
+    printFail "Tape ${TAPE} is marked as full, can't use!"
+  else
+    printOK "Tape ${TAPE} is known, but seems to have space left."
   fi
 else
-  printLine "I have no database of filled tapes."
+  printOK "I have no database of filled tapes."
 fi
 
 # Get current tape position.
@@ -203,7 +218,7 @@ TAPE_POS=$(mt -f ${TAPE_DEVICE} status | grep 'File number=' | awk -F'File numbe
 # Check if the tape is known to us.
 if [ ! -e "${BASE}/${TAPE}.track" ] ; then
   # Fresh tape.
-  printLine "New tape, starting from BOT."
+  printOK "New tape, starting from BOT."
   TRACK='0'
 else
   # Known track.
@@ -215,48 +230,53 @@ else
 
   # Check if we need to move the tape.
   if [ "${TAPE_POS}" != "${CUR_POS}" ] ;then
-    printLine "Known tape, continuing at ${CUR_POS}, currently at ${TAPE_POS}, need to forward ${fsf_count} marks!"
+    printInfo "Known tape, continuing at ${CUR_POS}, currently at ${TAPE_POS}, need to forward ${fsf_count} marks!"
     mt -f "${TAPE_DEVICE}" fsf "${fsf_count}"
 
     TAPE_POS=$(mt -f ${TAPE_DEVICE} status | grep 'File number=' | awk -F'File number=' ' { print $2 } ' | awk -F',' ' { print $1 } ')
-    printLine "Tape is now at position ${TAPE_POS}."
+    printOK "Tape is now at position ${TAPE_POS}."
   else
-    printLine "Known tape, continuing at ${CUR_POS}, currently at ${TAPE_POS}, no spooling required."
+    printOK "Known tape, continuing at ${CUR_POS}, currently at ${TAPE_POS}, no spooling required."
   fi
   TRACK="${CUR_POS}"
 fi
 
 # Accemble the options for tar
-#OPTIONS="--exclude-backups --listed-incremental=${BASE}/${MODULE}.diff -M --index-file=${BASE}/${MODULE}-${TAPE}-${TRACK}.idx -cvf ${TAPE_DEVICE}"
 OPTIONS="-cvf ${TAPE_DEVICE} --listed-incremental=${BASE}/${MODULE}.diff -M --index-file=${BASE}/${MODULE}-${TAPE}-${TRACK}.idx"
-
-# Free space on tape.
-# sudo sg_read_attr /dev/nst0 |  grep 'Remaining capacity in partition' | awk ' { print $6 } '
 
 # Check that the module exists in the mount dir.
 if [ ! -d "${MODULE_BASE}/${MODULE}" ] ; then
-  printLine "module ${MODULE_BASE}/${MODULE} not found."
-  printEnd
-  exit 1
+  printFail "module ${MODULE_BASE}/${MODULE} not found."
 fi
 
 # Assemble Includes, if any
-if [ -e "${BASE}/includes/${MODULE}" ] ; then
-  printLine "Include directive for ${MODULE} found."
-  grep -v '^ *#' < "${BASE}/includes/${MODULE}" | while IFS= read -r line ; do
-    includes=$includes "${MODULE_BASE}/${MODULE}/${line}"
-  done
+if [ -e "${SCRIPTPATH}/includes/${MODULE}" ] ; then
+  printInfo "Include directive for ${MODULE} found."
+
+  # New per-line handling.
+  while IFS= read -r line
+  do
+    includes="$includes ${MODULE_BASE}/${MODULE}/${line}"
+  done < <(grep -v '^ *#' < "${SCRIPTPATH}/includes/${MODULE}")
+
+  # Old but prone to whitespace
+  # for i in $(cat "${SCRIPTPATH}/includes/${MODULE}") ; do
+  #    includes="$includes ${MODULE_BASE}/${MODULE}/$i"
+  # done
+
 else
+  printInfo "No Include directive for ${MODULE} found."
   includes="${MODULE}"
 fi
 
 # Assemble Excludes, if any
 if [ -e "${BASE}/excludes/${MODULE}" ] ; then
-  printLine "Exclude directive for ${MODULE} found."
+  printInfo "Exclude directive for ${MODULE} found."
   #for i in $(cat "${BASE}/excludes/${MODULE}") ; do
   #  excludes=$excludes "--${MODULE_BASE}/${MODULE}/$i"
   #done
   excludes="--exclude-ignore=\"${BASE}/includes/${MODULE}\""
+
 fi
 
 # Back up the whole module or the includes ONLY.
@@ -268,9 +288,13 @@ fi
 
 # Do the actual backup.
 cd "${MODULE_BASE}" || exit 2
-printLine "Tar options: "${OPTIONS}" "${excludes}" "${includes}""
-tar ${OPTIONS} ${excludes} ${includes} 1>/dev/null
-printLine "Dump OK."
+printInfo "Tar options: ${OPTIONS} ${excludes} ${includes}, beginning backup."
+tar ${OPTIONS} ${excludes} ${backup_targets} 1>/dev/null >/dev/null
+printOK "Backup OK."
+
+# Free Space
+free_space=$(sg_read_attr /dev/nst0 |  grep 'Remaining capacity in partition' | awk ' { print $6 } ')
+printLine "Free space remaiming: ${free_space}"
 
 CUR_POS=$(mt -f ${TAPE_DEVICE} status | grep 'File number=' | awk -F'File number=' ' { print $2 } ' | awk -F',' ' { print $1 } ') || exit 2
 
@@ -287,7 +311,7 @@ else
   rm -f "${BASE}/${TAPE}.track"
 
   printLine "Setting Track ID to ${CUR_POS} for ID ${CURRENT_TAPE}."
-  echo "${CUR_POS}" > ${BASE}/"${CURRENT_TAPE}".track
+  echo "${CUR_POS}" > "${BASE}/${CURRENT_TAPE}.track"
   if [ ! -e "${BASE}/${MODULE}-${CURRENT_TAPE}-${TRACK}.idx" ] ; then
     ln -s "${BASE}/${MODULE}-${TAPE}-${TRACK}.idx" "${BASE}/${MODULE}-${CURRENT_TAPE}-${TRACK}.idx"
   fi
