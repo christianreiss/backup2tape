@@ -1,9 +1,9 @@
 #! /bin/bash
 
 # TODO
-# Locking
+# (test) Locking
 # Autochanger support
-# Actuall use of colors.
+# (test) Actuall use of colors.
 # (test) Exclude per Module
 # (test) Include per Module
 # (test) Read Only Tapes system
@@ -163,6 +163,28 @@ if [ "$(whoami)" != 'root' ] ; then
   printFail "Need superuser rights."
 fi
 
+# Locking
+function locking {
+  LOCKFILE="/tmp/$0.lock"
+  # Check if the lockfile exists.
+  if [ -e "${LOCKFILE}" ] ; then
+    # it does exist. Check if the process is still running.
+    PID="$(cat "${LOCKFILE}")"
+    if [ "$(ps --no-heading -q "${PID}" | wc -l)" != "0" ] ; then
+      # it is. Don't touch anything, walk away slowly.
+      printFail "Script is still running."
+      exit 1
+    else
+      # it is not. Stale lockfile. Keep calm and remove the lockfile.
+      rm "${LOCKFILE}"
+    fi
+  fi
+  # No lockfile present (anymore, stale would have been deleted)
+  echo "$BASHPID" > "${LOCKFILE}" || error "unable to create lockfile."
+  # Remove lockfile on script exit.
+  trap 'rm -f ${LOCKFILE}; exit' INT TERM EXIT
+}
+
 # Check if drive is busy.
 if ! mt -f ${TAPE_DEVICE} status >/dev/null 2>/dev/null ; then
   printFail "Tape drive ${TAPE_DEVICE} is busy."
@@ -180,7 +202,7 @@ fi
 #
 # The module (directory) to back up.
 # Load the serial number from the currently loaded tape.
-TAPE=$(sg_read_attr -q -f 0x0401 /dev/nst0 | awk -F 'Medium serial number: ' ' { print $2 } ' | awk ' { print $1 }')
+TAPE=$(sg_read_attr -q -f 0x0401 ${TAPE_DEVICE} | awk -F 'Medium serial number: ' ' { print $2 } ' | awk ' { print $1 }')
 
 # Show a summary of things found.
 printInfo "Device : ${TAPE_DEVICE}"
@@ -293,13 +315,13 @@ tar ${OPTIONS} ${excludes} ${backup_targets} 1>/dev/null >/dev/null
 printOK "Backup OK."
 
 # Free Space
-free_space=$(sg_read_attr /dev/nst0 |  grep 'Remaining capacity in partition' | awk ' { print $6 } ')
+free_space=$(sg_read_attr ${TAPE_DEVICE} |  grep 'Remaining capacity in partition' | awk ' { print $6 } ')
 printLine "Free space remaiming: ${free_space}"
 
 CUR_POS=$(mt -f ${TAPE_DEVICE} status | grep 'File number=' | awk -F'File number=' ' { print $2 } ' | awk -F',' ' { print $1 } ') || exit 2
 
 # Check if we are on the same tape we started, or not.
-CURRENT_TAPE=$(sudo sg_read_attr -q -f 0x0401 /dev/nst0 | awk -F 'Medium serial number: ' ' { print $2 } ' | awk ' { print $1 }')
+CURRENT_TAPE=$(sudo sg_read_attr -q -f 0x0401 ${TAPE_DEVICE} | awk -F 'Medium serial number: ' ' { print $2 } ' | awk ' { print $1 }')
 
 if [ "${CURRENT_TAPE}" == "${TAPE}" ]; then
   # Same Tape.
