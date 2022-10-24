@@ -203,6 +203,7 @@ fi
 # The module (directory) to back up.
 # Load the serial number from the currently loaded tape.
 TAPE=$(sg_read_attr -q -f 0x0401 ${TAPE_DEVICE} | awk -F 'Medium serial number: ' ' { print $2 } ' | awk ' { print $1 }')
+MODULE=${_arg_module}
 
 # Show a summary of things found.
 printInfo "Device : ${TAPE_DEVICE}"
@@ -219,7 +220,7 @@ else
 fi
 
 # Check if there is a tape inserted at all. If not, die.
-if [ "$(mt -f ${TAPE_DEVICE} | grep -c 'DR_OPEN IM_REP_EN')" == '1' ] ; then
+if [ "$(mt -f ${TAPE_DEVICE} status | grep -c 'DR_OPEN IM_REP_EN')" == '1' ] ; then
   prinfFail "No tape is inserted, aborting."
 fi
 
@@ -292,12 +293,12 @@ else
 fi
 
 # Assemble Excludes, if any
-if [ -e "${BASE}/excludes/${MODULE}" ] ; then
+if [ -e "${SCRIPTPATH}/excludes/${MODULE}" ] ; then
   printInfo "Exclude directive for ${MODULE} found."
   #for i in $(cat "${BASE}/excludes/${MODULE}") ; do
   #  excludes=$excludes "--${MODULE_BASE}/${MODULE}/$i"
   #done
-  excludes="--exclude-ignore=\"${BASE}/includes/${MODULE}\""
+  excludes="--exclude-ignore=\"${SCRIPTPATH}/includes/${MODULE}\""
 
 fi
 
@@ -308,6 +309,8 @@ else
   backup_targets=${MODULE}
 fi
 
+# exit 0
+
 # Do the actual backup.
 cd "${MODULE_BASE}" || exit 2
 printInfo "Tar options: ${OPTIONS} ${excludes} ${includes}, beginning backup."
@@ -315,7 +318,7 @@ tar ${OPTIONS} ${excludes} ${backup_targets} 1>/dev/null >/dev/null
 printOK "Backup OK."
 
 # Free Space
-free_space=$(sg_read_attr ${TAPE_DEVICE} |  grep 'Remaining capacity in partition' | awk ' { print $6 } ')
+free_space=$(sg_read_attr ${TAPE_DEVICE} | grep 'Remaining capacity in partition' | awk ' { print $6 } ')
 printLine "Free space remaiming: ${free_space}"
 
 CUR_POS=$(mt -f ${TAPE_DEVICE} status | grep 'File number=' | awk -F'File number=' ' { print $2 } ' | awk -F',' ' { print $1 } ') || exit 2
