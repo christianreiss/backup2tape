@@ -311,11 +311,27 @@ fi
 
 # exit 0
 
+# Encryption
+
+if [ -e "${SCRIPTPATH}/encryption/${MODULE}.key" ] ; then
+  stenc -f /dev/nst0 -e on -d on -a 1 -k "/home/chris/backup2tape/encryption/${MODULE}.key" 2>/dev/null || printFail "Unable to set encryption on device."
+  printOK "Encryption set successfully."
+  ENCRYPT=true
+else
+  printInfo "No encryption key found."
+  ENCRYPT=false
+fi
+
 # Do the actual backup.
 cd "${MODULE_BASE}" || exit 2
 printInfo "Tar options: ${OPTIONS} ${excludes} ${includes}, beginning backup."
 tar ${OPTIONS} ${excludes} ${backup_targets} 1>/dev/null >/dev/null
 printOK "Backup OK."
+
+if [ "${ENCRYPT}" == "true" ] ; then
+  stenc -f /dev/nst0 -e off -d off 2>/dev/null || printFail "Unable to remove encryption on device."
+  printOK "Encyption removed from device."
+fi
 
 # Free Space
 free_space=$(sg_read_attr ${TAPE_DEVICE} | grep 'Remaining capacity in partition' | awk ' { print $6 } ')
