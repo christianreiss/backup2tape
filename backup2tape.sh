@@ -298,7 +298,7 @@ if [ -e "${SCRIPTPATH}/excludes/${MODULE}" ] ; then
   #for i in $(cat "${BASE}/excludes/${MODULE}") ; do
   #  excludes=$excludes "--${MODULE_BASE}/${MODULE}/$i"
   #done
-  excludes="--exclude-ignore=\"${SCRIPTPATH}/includes/${MODULE}\""
+  excludes="--exclude-from=${SCRIPTPATH}/excludes/${MODULE}"
 
 fi
 
