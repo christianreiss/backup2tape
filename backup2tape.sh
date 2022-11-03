@@ -315,8 +315,10 @@ fi
 
 # Encryption
 
-if [ -e "${SCRIPTPATH}/encryption/${MODULE}.key" ] ; then
-  stenc -f /dev/nst0 -e on -d on -a 1 -k "/home/chris/backup2tape/encryption/${MODULE}.key" 2>/dev/null || printFail "Unable to set encryption on device."
+#if [ -e "${SCRIPTPATH}/encryption/${MODULE}.key" ] ; then
+if [ -e "${SCRIPTPATH}/encryption/encryption.key" ] ; then
+  #stenc -f /dev/nst0 -e on -d on -a 1 -k "/home/chris/backup2tape/encryption/${MODULE}.key" 2>/dev/null || printFail "Unable to set encryption on device."
+  stenc -f /dev/nst0 -e on -d on -a 1 -k "/home/chris/backup2tape/encryption/encryption.key" 2>/dev/null || printFail "Unable to set encryption on device."
   printOK "Encryption set successfully."
   ENCRYPT=true
 else
