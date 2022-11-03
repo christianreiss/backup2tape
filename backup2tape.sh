@@ -1,16 +1,14 @@
 #! /bin/bash
 
 # TODO
-# (test) Locking
-# Autochanger support
-# (test) Actuall use of colors.
-# (test) Exclude per Module
-# (test) Include per Module
 # (test) Read Only Tapes system
 # (test) Check for started tape id and last tape id
 # (test) Test Module exists
 # Store last-dump-dates
 # Enable Tape Compression by default using mt
+# Tape Change Script
+# Always-Full Backup modules
+# Autochanger support
 
 # Lazy Colors
 C_NONE="\033[0m"
@@ -262,10 +260,14 @@ else
     printOK "Known tape, continuing at ${CUR_POS}, currently at ${TAPE_POS}, no spooling required."
   fi
   TRACK="${CUR_POS}"
+  
+  # Free Space
+  free_space=$(sg_read_attr ${TAPE_DEVICE} | grep 'Remaining capacity in partition' | awk ' { print $6 } ')
+  printLine "Free space remaiming: ${free_space}"
 fi
 
 # Accemble the options for tar
-OPTIONS="-cvf ${TAPE_DEVICE} --listed-incremental=${BASE}/${MODULE}.diff -M --index-file=${BASE}/${MODULE}-${TAPE}-${TRACK}.idx"
+OPTIONS="-cvf ${TAPE_DEVICE} --no-check-device --listed-incremental=${BASE}/${MODULE}.diff -M --index-file=${BASE}/${MODULE}-${TAPE}-${TRACK}.idx"
 
 # Check that the module exists in the mount dir.
 if [ ! -d "${MODULE_BASE}/${MODULE}" ] ; then
@@ -325,6 +327,9 @@ fi
 # Do the actual backup.
 cd "${MODULE_BASE}" || exit 2
 printInfo "Tar options: ${OPTIONS} ${excludes} ${includes}, beginning backup."
+
+#exit 0
+
 tar ${OPTIONS} ${excludes} ${backup_targets} 1>/dev/null >/dev/null
 printOK "Backup OK."
 
