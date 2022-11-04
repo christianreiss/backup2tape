@@ -199,7 +199,7 @@ TAPE_POS=$(returnTrackNumber)
 spoolToLastFile
 
 # Accemble the options for tar
-OPTIONS="-cvf ${TAPE_DEVICE} --new-volume-script=${SCRIPTPATH}/tape_change.sh --no-xattrs --no-selinux --no-acls --no-check-device --listed-incremental=${BASE}/${MODULE}.diff -M --index-file=${BASE}/${MODULE}-${TAPE}-${TRACK}.idx"
+OPTIONS="-cvf ${TAPE_DEVICE} --no-xattrs --no-selinux --no-acls --no-check-device --listed-incremental=${BASE}/${MODULE}.diff -M --index-file=${BASE}/${MODULE}-${TAPE}-${TRACK}.idx"
 
 # Check that the module exists in the mount dir.
 if [ ! -d "${MODULE_BASE}/${MODULE}" ] ; then
@@ -237,14 +237,23 @@ fi
 
 # Do the actual backup.
 cd "${MODULE_BASE}" || exit 2
-printInfo "Tar options: ${OPTIONS} ${excludes} ${includes}, beginning backup."
+printInfo "Tar options: ${OPTIONS} ${excludes} ${includes}"
+printInfo "Tar Changer Command: --new-volume-script=${SCRIPTPATH}/tape_change.sh ${MODULE}"
 
+# This exit is a SAFE stop before things go awry.
+while true ; do
+  echo -n -e "  ├ [${C_CYAN}ACTION REQUIRED${C_NONE}]: We're all set, please type 'OK' to start! > "
+  read A
+  if [ "${A}" == "OK" ] ; then
+    break
+  fi
+done
+printEnd
 
-
-exit 0
-
-tar ${OPTIONS} ${excludes} ${backup_targets} 1>/dev/null >/dev/null
-printOK "Backup OK."
+export TAPE
+export TAPE_POS
+tar ${OPTIONS} ${excludes} ${backup_targets} --new-volume-script="${SCRIPTPATH}/tape_change.sh ${MODULE}"
+printHeader "Backup completed."
 
 # Disable encryption
 encryptionDisable

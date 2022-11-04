@@ -187,13 +187,13 @@ function requestNewTape {
 function encryptionEnable {
   encryptionKey="${SCRIPTPATH}/encryption/${TAPE}.key"
   if [ ! -e "${encryptionKey}" ] ; then
-    printInfo "No encryption key found for ${TAPE}, generating."
     openssl rand -hex 32 > "${encryptionKey}" || printFail "Unable to generate encryption key ${encryptionKey}"
+    printOK "Encryption key for ${TAPE} generated."
   fi
 
   ENCRYPT=true
   stenc -f ${TAPE_DEVICE} -e on -d on -a 1 -k "${encryptionKey}" 2>/dev/null || printFail "Unable to set encryption on device."
-  printInfo "Encryption enabled on device ${TAPE_DEVICE} for Volume ${TAPE} using key ${encryptionKey}."
+  printOK "Encryption enabled on device ${TAPE_DEVICE} for Volume ${TAPE} using key ${encryptionKey}."
 }
 
 # This disabled the encryption on the device.
@@ -214,6 +214,10 @@ function spoolToLastFile {
     # Known track.
     CUR_POS=$(cat "${BASE}/${TAPE}.track")
     (( fsf_count=CUR_POS-TAPE_POS )) || true
+
+    if [ "${fsf_count}" -lt 0 ] ; then
+      printFail "Safety alert: Current Tape is as position ${TAPE_POS}, last known is ${CUR_POS}.. Was there some manual write on it?"
+    fi
 
     # Check if we need to move the tape.
     if [ "${TAPE_POS}" != "${CUR_POS}" ] ;then
