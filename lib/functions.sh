@@ -185,15 +185,31 @@ function requestNewTape {
 
 # Enable the encryption on a device, stenc is required.
 function encryptionEnable {
-  encryptionKey="${SCRIPTPATH}/encryption/${TAPE}.key"
-  if [ ! -e "${encryptionKey}" ] ; then
-    openssl rand -hex 32 > "${encryptionKey}" || printFail "Unable to generate encryption key ${encryptionKey}"
-    printOK "Encryption key for ${TAPE} generated."
+
+  # Skip encryption for some modules.
+  if [ -e "${SCRIPTPATH}/encryption/skip_modules" ] ; then
+    if [ "$(grep -c ${MODULE} ${SCRIPTPATH}/encryption/skip_modules)" -gt 0 ] ; then
+      printInfo "As per override encryption will not be enabled for module ${MODULE}."
+      ENCRYPT=false
+    else
+      ENCRYPT=true
+    fi
+  else
+    ENCRYPT=true
   fi
 
-  ENCRYPT=true
-  stenc -f ${TAPE_DEVICE} -e on -d on -a 1 -k "${encryptionKey}" 2>/dev/null || printFail "Unable to set encryption on device."
-  printOK "Encryption enabled on device ${TAPE_DEVICE} for Volume ${TAPE} using key ${encryptionKey}."
+  if [ "${ENCRYPT}" == 'true' ] ; then
+    # Enable encryption with random keys per tape.
+    encryptionKey="${SCRIPTPATH}/encryption/${TAPE}.key"
+    if [ ! -e "${encryptionKey}" ] ; then
+      # Create a new random key for this one tape (not module)
+      openssl rand -hex 32 > "${encryptionKey}" || printFail "Unable to generate encryption key ${encryptionKey}"
+      printOK "Encryption key for ${TAPE} generated."
+    fi
+    ENCRYPT=true
+    stenc -f ${TAPE_DEVICE} -e on -d on -a 1 -k "${encryptionKey}" 2>/dev/null || printFail "Unable to set encryption on device."
+    printOK "Encryption enabled on device ${TAPE_DEVICE} for Volume ${TAPE} using key ${encryptionKey}."
+  fi
 }
 
 # This disabled the encryption on the device.
