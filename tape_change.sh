@@ -11,12 +11,12 @@ TAPE_DEVICE="/dev/nst0"
 . ${SCRIPTPATH}/lib/functions.sh
 
 # Tell the people who we are :-)
-printHeader "backup2tape - Tape Changer"
+printHeader "backup2tape - Tape Changer, Version ${VERSION}"
 
 # Handle overrides, if present.
-if [ -e "config" ] ; then
+if [ -e "${SCRIPTPATH}/.config" ] ; then
   printInfo "Local config round, loading."
-  . config
+  . "${SCRIPTPATH}/.config"
 fi
 
 # Assign module vars

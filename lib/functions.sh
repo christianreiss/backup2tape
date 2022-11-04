@@ -1,5 +1,7 @@
 #! /bin/bash
 
+VERSION="20221104"
+
 #
 # Fancy Stuff
 #
