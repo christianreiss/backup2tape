@@ -94,6 +94,15 @@ function ejectTape {
   fi
 }
 
+# Check if there is a tape in the drive.
+function testIfTapeInDrive {
+  if [ "$(mt -f ${TAPE_DEVICE} status | grep -c 'DR_OPEN IM_REP_EN')" == '1' ] ; then
+    echo -n "false"
+  else
+    echo -n "true"
+  fi
+}
+
 # User action: Wait for a new tape and check.
 function waitForNewTape {
   ejectTape
@@ -123,7 +132,7 @@ function getSerialNumber {
 
 function ReturnSerialNumber {
   X=$(sg_read_attr -q -f 0x0401 ${TAPE_DEVICE} 2>/dev/null | awk -F 'Medium serial number: ' ' { print $2 } ' | awk ' { print $1 }')
-  echo -n ${CUR_TAPE}
+  echo -n ${X}
   unset X
 }
 
