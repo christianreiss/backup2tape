@@ -46,7 +46,7 @@ function printEnd {
 
 
 # Check root
-functon check_root {
+function check_root {
   if [ "$(whoami)" != 'root' ] ; then
     printFail "Need superuser rights."
   fi
@@ -88,7 +88,7 @@ function ejectTape {
     # Tape is present, eject it.
     encryptionDisable
     mt -f ${TAPE_DEVICE} eject
-    printLine "Tape ejected."
+    printOK "Tape ejected."
   fi
 }
 
@@ -115,19 +115,19 @@ function waitForNewTape {
 
 # Load Serial Number
 function getSerialNumber {
-  TAPE=$(sg_read_attr -q -f 0x0401 ${TAPE_DEVICE} | awk -F 'Medium serial number: ' ' { print $2 } ' | awk ' { print $1 }')
+  TAPE=$(sg_read_attr -q -f 0x0401 ${TAPE_DEVICE} 2>/dev/null | awk -F 'Medium serial number: ' ' { print $2 } ' | awk ' { print $1 }')
   printInfo "Tape Serial Number: ${TAPE}"
 }
 
-# Load Serial Number
-#function ReturnSerialNumber {
-#  CUR_TAPE=$(sg_read_attr -q -f 0x0401 ${TAPE_DEVICE} | awk -F 'Medium serial number: ' ' { print $2 } ' | awk ' { print $1 }')
-#  echo ${CUR_TAPE}
-#}
+function ReturnSerialNumber {
+  X=$(sg_read_attr -q -f 0x0401 ${TAPE_DEVICE} 2>/dev/null | awk -F 'Medium serial number: ' ' { print $2 } ' | awk ' { print $1 }')
+  echo -n ${CUR_TAPE}
+  unset X
+}
 
 # Get the free space of current tape.
 function getFreeSpace {
-  free_space=$(sg_read_attr ${TAPE_DEVICE} | grep 'Remaining capacity in partition' | awk ' { print $6 } ')
+  free_space=$(sg_read_attr ${TAPE_DEVICE} 2>/dev/null | grep 'Remaining capacity in partition' | awk ' { print $6 } ')
   printInfo "Free space remaiming: ${free_space}"
 }
 
@@ -146,17 +146,26 @@ function returnTrackNumber {
 
 # Check if the tape is readable.
 function checkTapeReadOnly {
+  # Our own Database.
   if [ -e "${BASE}/read-only.tapes" ] ; then
     if [ "$(grep -c "${TAPE}" "${BASE}/read-only.tapes")" != '0' ] ; then
-      printWarn "Tape ${TAPE} is marked as full, can't use!"
+      printWarning "Tape ${TAPE} is marked as full, can't use!"
       READONLY=true
     else
-      printOK "Tape ${TAPE} is known, but seems to have space left."
+      # printOK "Tape ${TAPE} is known, but seems to have space left."
       READONLY=false
     fi
   else
     printOK "I have no database of filled tapes."
     READONLY=false
+  fi
+
+  # Physical Switch
+  if [ "${READONLY}" == 'false' ] ; then
+    if [ "$(mt -f ${TAPE_DEVICE} status | grep -c 'WR_PROT')" -gt 0 ] ; then
+      printWarning "Tape ${TAPE} is phsically write protected, can't use!"
+      READONLY=true
+    fi
   fi
 }
 
@@ -169,7 +178,7 @@ function requestNewTape {
       printOK "Tape ${TAPE} is writeable, ok."
       break;
     fi
-    printWarn "Tape ${TAPE} is write protected!"
+    printWarning "Tape ${TAPE} is write protected!"
     ejectTape
   done
 }
@@ -189,8 +198,10 @@ function encryptionEnable {
 
 # This disabled the encryption on the device.
 function encryptionDisable {
-  stenc -f ${TAPE_DEVICE} -e off -d off 2>/dev/null || printFail "Unable to remove encryption on device."
-  printInfo "Encryption disabled on device ${TAPE_DEVICE}."
+  if [ "$(stenc -f /dev/nst0 | grep -c Encrypting)" -gt 0 ] ; then
+    stenc -f ${TAPE_DEVICE} -e off -d off 2>/dev/null || printFail "Unable to remove encryption on device."
+    printInfo "Encryption disabled on device ${TAPE_DEVICE}."
+  fi
 }
 
 # Spools the tape to the last used location (free space)
