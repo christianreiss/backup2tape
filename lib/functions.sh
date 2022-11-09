@@ -209,6 +209,12 @@ function encryptionEnable {
     ENCRYPT=true
   fi
 
+  # Encryption Disabled: Make sure its off.
+  if [ "${ENCRYPT}" == 'true' ] ; then
+    stenc -f ${TAPE_DEVICE} -e off -d off 2>/dev/null || printFail "Unable to remove encryption on device."
+  fi
+
+  # Encryption Enabled: Load the ley.
   if [ "${ENCRYPT}" == 'true' ] ; then
     # Enable encryption with random keys per tape.
     encryptionKey="${SCRIPTPATH}/encryption/${TAPE}.key"
