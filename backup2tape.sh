@@ -74,7 +74,7 @@ TAPE_POS=$(returnTrackNumber)
 spoolToLastFile
 
 # Accemble the options for tar
-OPTIONS="-cvf ${TAPE_DEVICE} --no-xattrs --no-selinux --no-acls --no-check-device --listed-incremental=${BASE}/${MODULE}.diff -M --index-file=${BASE}/${MODULE}-${TAPE}-${TRACK}.idx"
+OPTIONS="-cvf ${TAPE_DEVICE} --hard-dereference --no-xattrs --no-selinux --no-acls --no-check-device --listed-incremental=${BASE}/${MODULE}.diff -M --index-file=${BASE}/${MODULE}-${TAPE}-${TRACK}.idx"
 
 # Check that the module exists in the mount dir.
 if [ ! -d "${MODULE_BASE}/${MODULE}" ] ; then
