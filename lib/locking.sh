@@ -1,24 +1,27 @@
 #! /bin/bash
 
 function locking {
-  LOCKFILE="/tmp/$0.lock"
+  LOCKFILE="/tmp/$(basename "$0").lock"
+
   # Check if the lockfile exists.
-  if [ -e "${LOCKFILE}" ] ; then
-    # it does exist. Check if the process is still running.
-    PID="$(cat "${LOCKFILE}")"
-    if [ "$(ps --no-heading -q "${PID}" | wc -l)" != "0" ] ; then
-      # it is. Don't touch anything, walk away slowly.
-      printFail "Script is still running."
+  if [ -e "${LOCKFILE}" ]; then
+    # It exists. Check if the process is still running.
+    PID=$(cat "${LOCKFILE}")
+    if ps -p "${PID}" >/dev/null 2>&1; then
+      # It is. Don't touch anything, exit gracefully.
+      echo "Script is already running with PID ${PID}. Exiting."
       exit 1
     else
-      # it is not. Stale lockfile. Keep calm and remove the lockfile.
+      # It is not. Stale lockfile. Remove the lockfile.
       rm "${LOCKFILE}"
     fi
   fi
-  # No lockfile present (anymore, stale would have been deleted)
-  echo "$BASHPID" > "${LOCKFILE}" || error "unable to create lockfile."
+
+  # Create a new lockfile and store the current process ID.
+  echo "$$" > "${LOCKFILE}" || { echo "Unable to create lockfile."; exit 1; }
+
   # Remove lockfile on script exit.
-  trap 'rm -f ${LOCKFILE}; exit' INT TERM EXIT
+  trap 'rm -f "${LOCKFILE}"' INT TERM EXIT
 }
 
 # Check if drive is busy.
@@ -27,3 +30,4 @@ if ! mt -f ${TAPE_DEVICE} status >/dev/null 2>/dev/null ; then
 else
   printOK "Tape drive ${TAPE_DEVICE} is idle."
 fi
+
