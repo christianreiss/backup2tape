@@ -211,7 +211,7 @@ function encryptionEnable {
 
   # Encryption Disabled: Make sure its off.
   if [ "${ENCRYPT}" == 'false' ] ; then
-    stenc -f ${TAPE_DEVICE} -e off -d off >/dev/null 2>/dev/null || printFail "Unable to remove encryption on device."
+    stenc -f ${TAPE_DEVICE} -a 1 -e off >/dev/null 2>/dev/null || printFail "Unable to remove encryption on device."
   fi
 
   # Encryption Enabled: Load the ley.
@@ -233,7 +233,7 @@ function encryptionEnable {
 # This disabled the encryption on the device.
 function encryptionDisable {
   if [ "$(stenc -f /dev/nst0 | grep -c Encrypting)" -gt 0 ] ; then
-    stenc -f ${TAPE_DEVICE} -e off -d off 2>/dev/null || printFail "Unable to remove encryption on device."
+    stenc -f ${TAPE_DEVICE} -a 1 -e off  2>/dev/null || printFail "Unable to remove encryption on device."
     printInfo "Encryption disabled on device ${TAPE_DEVICE}."
   fi
 }
