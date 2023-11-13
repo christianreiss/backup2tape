@@ -1,6 +1,5 @@
 #! /bin/bash
-
-VERSION="20221104"
+VERSION="20231113"
 
 #
 # Fancy Stuff
@@ -144,7 +143,8 @@ function getFreeSpace {
 
 # Get the current tape location (file id)
 function getTrackNumber {
-  CUR_POS=$(mt -f ${TAPE_DEVICE} status | grep 'File number=' | awk -F'File number=' ' { print $2 } ' | awk -F',' ' { print $1 } ') || exit 2
+  #CUR_POS=$(mt -f ${TAPE_DEVICE} status | grep -i 'File number=' | awk -i -F'File number=' ' { print $2 } ' | awk -F',' ' { print $1 } ') || exit 2
+  CUR_POS=$(mt -f ${TAPE_DEVICE} status | sed -E 's/ *= */=/g; s/[^=]+/\L&/g' | grep 'file number=' | awk  -F'file number=' ' { print $2 } ' | awk -F',' ' { print $1 } ') || exit 2
   printInfo "Current Track Number: ${CUR_POS}"
 }
 
@@ -210,8 +210,8 @@ function encryptionEnable {
   fi
 
   # Encryption Disabled: Make sure its off.
-  if [ "${ENCRYPT}" == 'true' ] ; then
-    stenc -f ${TAPE_DEVICE} -e off -d off 2>/dev/null || printFail "Unable to remove encryption on device."
+  if [ "${ENCRYPT}" == 'false' ] ; then
+    stenc -f ${TAPE_DEVICE} -e off -d off >/dev/null 2>/dev/null || printFail "Unable to remove encryption on device."
   fi
 
   # Encryption Enabled: Load the ley.
@@ -224,7 +224,8 @@ function encryptionEnable {
       printOK "Encryption key for ${TAPE} generated."
     fi
     ENCRYPT=true
-    stenc -f ${TAPE_DEVICE} -e on -d on -a 1 -k "${encryptionKey}" 2>/dev/null || printFail "Unable to set encryption on device."
+    # stenc -f ${TAPE_DEVICE} -e on -d on -a 1 -k "${encryptionKey}" 2>/dev/null || printFail "Unable to set encryption on device."
+    stenc -f ${TAPE_DEVICE} -e on -a 1 -k "${encryptionKey}" >/dev/null 2>/dev/null || printFail "Unable to set encryption on device."
     printOK "Encryption enabled on device ${TAPE_DEVICE} for Volume ${TAPE} using key ${encryptionKey}."
   fi
 }
@@ -243,10 +244,16 @@ function spoolToLastFile {
     # Fresh tape.
     printOK "New tape, starting from BOT."
     TRACK='0'
+
   else
+
+    if [ "${CUR_POS}" == "" ] ; then
+       getTrackNumber
+    fi
+
     # Known track.
-    CUR_POS=$(cat "${BASE}/${TAPE}.track")
-    (( fsf_count=CUR_POS-TAPE_POS )) || true
+    TAPE_POS=$(cat "${BASE}/${TAPE}.track")
+    (( fsf_count=TAPE_POS-CUR_POS )) || true
 
     if [ "${fsf_count}" -lt 0 ] ; then
       printFail "Safety alert: Current Tape is as position ${TAPE_POS}, last known is ${CUR_POS}.. Was there some manual write on it?"
@@ -254,7 +261,7 @@ function spoolToLastFile {
 
     # Check if we need to move the tape.
     if [ "${TAPE_POS}" != "${CUR_POS}" ] ;then
-      printInfo "Known tape, continuing at ${CUR_POS}, currently at ${TAPE_POS}, need to forward ${fsf_count} marks!"
+      printInfo "Known tape, continuing at ${TAPE_POS}, currently at ${CUR_POS}, need to forward ${fsf_count} marks!"
       mt -f "${TAPE_DEVICE}" fsf "${fsf_count}"
 
       TAPE_POS=$(returnTrackNumber)
